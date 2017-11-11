@@ -1,0 +1,6 @@
+boto3
+shell
+click
+requests
+pymysql
+amaasinfra
