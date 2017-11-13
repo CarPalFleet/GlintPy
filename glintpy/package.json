@@ -19,7 +19,13 @@
         "timeout": 3,
         "path": "lambda function directory",
         "packages": ["dependancy package 1", "dependancy package 2"],
-        "files": ["dependancy file 1", "dependancy file 2"]
+        "files": ["dependancy file 1", "dependancy file 2"],
+        "events": [{
+            "name": "test_event",
+            "schedule": "rate(1 minute)",
+            "state": "ENABLED",
+            "iamRole": "IAM_ROLE_ARN"
+        }]
     }],
     "vpcs":[{
         "skip": true,
