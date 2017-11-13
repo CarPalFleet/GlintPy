@@ -5,7 +5,7 @@ import os
 import sys
 import shutil
 import string
-import random
+import time
 
 def lambda_automate(file):
     # Load the list of lambda functions to be updated to AWS
@@ -16,7 +16,6 @@ def lambda_automate(file):
     except Exception as e:
         print('Error. Unable to load the setting file.')
         sys.exit()
-
 
     lambdas = data.get('lambdas', None)
     virtualenv = data.get('pythonVirtualenv')
@@ -33,6 +32,7 @@ def lambda_automate(file):
 
     print('Start to package lambda functions...')
 
+    cloudwatch_events = boto3.client('events')
     for item in lambdas:
         if not item.get('skip'):
             lambda_name = item.get('name', '').split('.')[0]
@@ -51,9 +51,7 @@ def lambda_automate(file):
                 raise FileNotFoundError('Cannot find the lambda function {}'.format(item.get('name', '')))
                 sys.exit()
 
-            tmp_folder = ''.join([path, 
-                                lambda_name,
-                                '_'] + random.choices(string.ascii_lowercase + string.digits, k=16))
+            tmp_folder = ''.join([path, lambda_name, '_']) + str(int(time.time()))
 
             if not os.path.exists(tmp_folder):
                 os.makedirs(tmp_folder)
@@ -96,7 +94,39 @@ def lambda_automate(file):
                                                         Timeout=item.get('timeout', 3),
                                                         Publish=True)
 
+                #Create cloudwatch event trigger for lambda function here
+                lambda_arn = response.get('FunctionArn', '')
+
+                events = item.get('events')
+        
+                for event in events:
+                    #create rule here
+                    response = cloudwatch_events.put_rule(Name=event.get('name'),
+                                                          RoleArn=event.get('iamRole'),
+                                                          ScheduleExpression=event.get('schedule'),
+                                                          State=event.get('state'))
+
+                    response = lambda_client.add_permission(
+                        FunctionName=lambda_name,
+                        StatementId=str(int(time.time())),
+                        Action='lambda:*',
+                        Principal='events.amazonaws.com',
+                        SourceArn=response.get('RuleArn')
+                    )
+
+                    response = cloudwatch_events.put_targets(Rule=event.get('name'),
+                                                             Targets=[
+                                                                {
+                                                                    'Arn': lambda_arn,
+                                                                    'Id': '{}CloudWatchEventsTarget'.format(lambda_name),
+                                                                }
+                                                             ])
+                    
 
             print('Done deploying '+ item.get('name', ''))
 
     print('Success! Done deploying.')
+
+
+if __name__ == '__main__':
+    lambda_automate('~/Downloads/package.json')
